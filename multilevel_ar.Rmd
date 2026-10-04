@@ -1,0 +1,168 @@
+---
+title: "Fitting a multilevel VAR(1) model"
+author: "Sophie W. Berkhout"
+date: "5-10-2026"
+output: html_notebook
+---
+
+### The data set
+Data set from Pavani et al. (2017), made available by openESM (2025). 
+14 days, 5 beeps per day
+
+```{r read_data}
+dat <- read.csv("0027_pavani.csv")
+```
+
+### Creating a lagged variable
+We will look at the variable positive affect (`pa`). 
+First, we will create a lagged version of this variable.
+Make sure that the lagged variable has a missing value for every first beep of
+the day. This will also make sure that the last observation of one person is not
+linked to the first observation of the next person.
+
+```{r}
+# your code here
+```
+
+### Descriptives
+Compute the mean and autocorrelation of each person's positive affect
+and look at their distributions. Do the individuals differ a lot?
+
+Compute the correlations between them. 
+How would you interpret these results? It can help to make scatter plots to
+visualize the relations between the variables.
+
+```{r descriptives}
+# your code here
+```
+
+### Fit the multilevel AR(1) model
+
+#### Linear mixed effect model with `lme4`
+You can estimate a multilevel autoregressive model with a linear mixed effect
+model using the `lme4` package. You have to set the lagged variable as the 
+predictor and specify a random intercept and random slope. You need another
+package to get p-values of the coefficients called `lmerTest`. Just loading
+the package should be enough to get the p-values.
+
+Note that we generally prefer to estimate the person means instead of their
+intercepts, especially if we are interested the relations between the 
+person-specific estimates. Thus, we have to center the lagged variable.
+
+You can extract the person-specific estimates with the function `coef()`.
+
+```{r fit_lme4}
+if (!require("lme4")) install.packages("lme4")
+library(lme4)
+if (!require("lmerTest")) install.packages("lmerTest")
+library(lmerTest)
+# your code here
+```
+
+How do the random effects relate to each other? 
+
+Now compare the random effect estimates to the observed means and 
+autocorrelations. Look at their distributions. How do they differ?
+
+Also make scatter plots to visualize the relation between the person-specific
+means and autoregressions.
+Do these differ from the correlation between the observed mean and
+autocorrelation?
+
+```{r lme4_persons}
+# your code here
+```
+
+Similar to the single-level model, with this kind of univariate estimation
+you cannot fit a multivariate multilevel model as it does not allow for the
+estimation of the covariance between the innovations.
+
+Therefore, if you are interested in fitting a multilevel vector autoregressive
+model, you may want to use a package that can handle multivariate estimation.
+
+#### Multilevel (V)AR estimation with `psychonetrics`
+The `psychonetrics` package can fit a multilevel autoregressive model with the
+`ml_gvar()` function. For this you do not need a lagged variable, the function
+will do this for you. You do, however, need to specify the `dayvar` and 
+`beepvar` argument to make sure that the first beep of the day is not regressed
+on the last beep of the previous day.
+
+Fit the multilevel AR(1) model using `ml_gvar()`.
+
+```{r}
+?ml_gvar
+# your code here
+```
+
+Unfortunately, I have not found a way to extract the person-specific estimates
+using this package. I think it is because it does not estimate the
+person-specific effects directly.
+
+The package maintainer (Sacha Epskamp) also has a separate package called
+`mlVAR`, which has similar functionality as the `ml_gvar()` function but with a
+function named `mlVAR()`. This package has an extra function `resimulate()`, 
+which estimates person-specific effects in quite an interesting way.
+
+From the [documentation](https://www.rdocumentation.org/packages/mlVAR/versions/0.7.3/topics/mlVAR) of the `mlVAR` package:
+"The `resimulate` method generates simulated data from a fitted `mlVAR` model using person-specific estimated parameters (fixed + random effects). For each person, a VAR time series is simulated using their estimated temporal effects (Beta), contemporaneous precision matrix (Theta), and person-specific means (mu). The output has the same dimensions and missingness pattern as the original input data, making it suitable for posterior predictive checks and model diagnostics."
+
+Why did I still include it in this exercise? The estimation of this function is
+really fast. Sometimes researchers are not interested in the person-specific
+estimates, and just an estimate of the variance is enough. In that case, this
+package is probably the most efficient option.
+
+#### Multilevel (V)AR estimation with `mlts`
+If you are interested in the person-specific estimates, there is a package
+called `mlts` with this functionality. It uses Bayesian estimation and makes
+use of the Stan software. Its estimation takes a little longer, so you have to
+be a bit more patient.
+
+You need to use two functions. First, you need to specify what kind of model
+you want to estimate using `mlts_model()`. Then you can fit the model using
+`mlts_fit()`.
+
+Note that for the specification in `mlts_fit()` the `beep` requires a different
+formulation than the `beepvar` argument of the `psychonetrics` package. Here,
+the beep number has to go up across days. For example, if there are five beeps
+per day, then the beep indicator of the first beep of the second day would be
+6 instead of 1. Luckily, the data already came with such a variable, called
+`counter`.
+
+You also need to specify how you want to deal with the night gap with the
+argument `n_overnight_NAs`. You have to indicate the number of NA's that you
+want it to insert between the last beep of a day and the first beep of the next
+day. A higher number means that the effect of the ast beep of a day and the 
+first beep of the next day is smaller. The model estimates missing data using 
+Bayesian estimation, so you do not want to set this too high, which would make
+it harder to estimate the missing values.
+
+Finally, to extract the person-specific estimates you need to set the argument
+`monitor_person_pars` to `TRUE`.
+
+A tutorial for a multilevel AR(1) model is provided here: 
+https://cran.r-project.org/web/packages/mlts/vignettes/manifest_ar.html
+
+```{r fit_multilevel}
+if (!require("mlts")) install.packages("mlts")
+library(mlts)
+?mlts_model
+?mlts_fit
+# your code here
+```
+
+A pro of this package is that it offers multivariate estimation as well as
+estimation of predictor effects on the between-level. For example, you could
+estimate whether neuroticism (measured once) can predict the person-specific autoregressive effect estimates.
+
+Compare the estimates of each of these three estimation techniques. Are they
+similar? Are there any differences?
+
+### Extra exercise
+Fit a multilevel vector autoregressive model with either the `psychonetrics` or
+the `mlts` package. You can choose any of the variables from the data set.
+
+
+### References
+openESM. (2025). 0027_pavani (Version 1.0.0) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.17347893
+
+Pavani, J., Le Vigouroux, S., Kop, J., Congard, A., & Dauvier, B. (2017). A network approach to affect regulation dynamics and personality trait–induced variations: Extraversion and neuroticism moderate reciprocal influences between affect and affect regulation strategies. European Journal of Personality, 31(4), 329–346. https://doi.org/10.1002/per.2109
