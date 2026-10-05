@@ -1,0 +1,143 @@
+---
+title: "Introduction to the first-order autoregressive model"
+author: "Sophie W. Berkhout"
+date: "5-10-2026"
+output: html_notebook
+---
+
+### Generating an AR(1) process
+Generating and visualizing model-implied data can often help to understand the
+model implied data patterns.The following code simulates data from a first-
+order autoregressive model. Run the code so that the function `simulateVAR` is
+in your environment. 
+
+```{r sim_ar_function}
+simulateAR <- function(nt = 30, c = 3, phi = 0.3, resvar = 1, burnin = 500) {
+  # create empty vector of y including burnin time
+  # burnin is required to stabilize the process
+  y <- numeric(burnin + nt)
+  # generate innovations with specified residual variance
+  e <- rnorm(burnin + nt, 0, sqrt(resvar))
+  # compute y by iterating over time
+  # note that since we use y[t - 1] we need to start at t = 2 instead of t = 1,
+  # because there is no t = 0.
+  for (t in 2:(burnin + nt)) {
+    y[t] <- c + phi * y[t - 1] + e[t]
+  }
+  # create data frame and remove burnin
+  df <- data.frame(t = 1:nt, y = y[(burnin + 1):(burnin + nt)] )
+  return(df)
+}
+```
+
+The function takes the following arguments:
+
+- `nt`: The total number of time points, with default $T = 30$.
+- `c`: The intercept, with default $c = 3$.
+- `phi`: The autoregressive parameter, with default $\phi = 0.3$.
+- `resvar`: The residual (i.e., innovation) variance, with default $\sigma^2 = 1$.
+- `burnin`: The total number of burnin iterations to use to let the process 
+stabilize before saving the data (default = $500$).
+
+The following code runs the function and saves it in a data frame `df`. 
+
+```{r sim_ar_dat}
+df <- simulateAR()
+```
+
+### Descriptives
+Compute descriptive statistics of the generared data.
+
+```{r descriptives}
+summary(df$y)
+var(df$y)
+```
+
+### Plot time series
+Create a function that plots a time series that takes a data frame as input
+with columns `t` and `y`. Also add a vertical line at the observed mean of `y`.
+
+```{r timeseries}
+plotTimeSeries <- function(df) {
+  plot(df$t, df$y)
+  abline(h = mean(df$y))
+}
+```
+
+### Plot autocorrelation scatter plot
+To create a scatter plot for the autocorrelation, you first have to create a
+lagged version of `y`. Use the following code chunk to compute the lagged
+variable and add this to the data frame `df` with the name `y_lag`.
+
+Inspect the data frame to see whether the lagged variable is the same as the
+previous value of `y`.
+
+```{r create_lag}
+df$y_lag <- c(NA, df$y[-nrow(df)])
+```
+
+Now, you can create a function that plots a scatter plot that takes a data frame
+as input with columns `y`, and `y_lag`. Also add a regression line indicating
+the autoregressive effect.
+
+```{r scatterplot}
+plotScatterAuto <- function(df) {
+  plot(df$y_lag, df$y)
+  abline(lm(y ~ y_lag, data = df))
+}
+```
+
+```{r plots}
+layout(matrix(c(1, 2), nrow = 1), widths = c(3, 2))
+plotTimeSeries(df)
+plotScatterAuto(df)
+layout(1)
+```
+
+### Simulating new data sets
+You can run the following chunk over and over to simulate new data frames and
+visualize them each time. You can adjust the arguments in `simulateAR` to 
+see how to process changes.
+
+```{r sim_df_new}
+df_new <- simulateAR(nt = 30, c = 3, phi = 0.3, resvar = 1)
+df_new$y_lag <-  c(NA, df_new$y[-nrow(df_new)])
+layout(matrix(c(1, 2), nrow = 1), widths = c(3, 2))
+plotTimeSeries(df_new)
+plotScatterAuto(df_new)
+layout(1)
+```
+
+### Fit an AR(1) model
+You have already created a lagged version of `y` to make the autocorrelation
+scatter plot. You can now use the same data frame to fit an AR(1) model using
+linear regression. Use `y` as the dependent variable and `y_lag` as the
+independent variable.
+
+```{r fit_ar}
+# your code to fit a linear regression model
+mod1 <- lm(y ~ y_lag, df)
+mod1
+```
+
+Are the parameters (intercept and autoregression) recovered well? You can 
+simulate a data set with a larger sample size to confirm. You will have to
+create a new lagged column in that case.
+
+Compute the mean from the estimated parameters (recall that
+$\mu = \frac{c}{1 - \phi}$).
+
+```{r mean}
+coef(mod1)[1] / (1 - coef(mod1)[2])
+```
+
+### Alternative AR(1) model
+Now run the following chunk. What happens to the parameter values?
+
+```{r fit_ar_alt}
+y_mean <- mean(df$y)
+cat(paste("The mean of y is: ", round(y_mean, 3)))
+df$y_lag_c <- df$y_lag - y_mean
+mod2 <- lm(y ~ y_lag_c, df)
+mod2
+```
