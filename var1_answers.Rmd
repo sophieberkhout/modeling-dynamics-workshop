@@ -1,0 +1,115 @@
+---
+title: "Fitting the VAR(1) model to empirical data"
+author: "Sophie W. Berkhout"
+date: "5-10-2026"
+output: html_notebook
+---
+
+### Data from Peter Groot
+For this exercise you will use the same data set as the previous exercise.
+The file 'data_groot_prepped.csv' contains the data with lagged variables, so
+you do not have to compute these again.
+
+```{r read_data}
+dat <- read.csv("data_groot_prepped.csv")
+```
+
+We are going to look at the cross-lagged relations between `selfdoubt` and `tired`.
+
+### Plots
+First make a time series plot with both variables in the same plot. Give the
+lines a different colour. Can you see similar patterns?
+
+```{r plots_timeseries}
+plot(as.POSIXct(dat$datetime), dat$selfdoubt, type = "l")
+lines(as.POSIXct(dat$datetime), dat$tired, col = "red")
+```
+
+Similar to an autocorrelation scatter plot, you can plot the cross-lagged relations; 
+one with $y_t$ versus $x_{t-1}$ and one with $x_t$ versus $y_{t-1}$.
+
+Make cross-lagged relation scatter plots for `self-doubt` versus `tired`, and vice versa.
+
+```{r plots_cross_lagged}
+plot(dat$selfdoubt_lag, dat$tired)
+
+plot(dat$tired_lag, dat$selfdoubt)
+```
+
+### Fit the VAR(1) model
+First, estimate two univariate models, one with `selfdoubt` as outcome and one 
+with `tired` as outcome, and the lagged versions of both variables as predictors.
+Center the predictors if you want the intercept to represent the mean of the process.
+
+```{r univariate}
+# univariate model outcome selfdoubt
+var_selfdoubt <- lm(selfdoubt ~ selfdoubt_lag + tired_lag, data = dat)
+# univariate model outcome tired
+var_tired <- lm(tired ~ tired_lag + selfdoubt_lag, data = dat)
+```
+
+Answer the following questions:
+
+- Are the autoregressive effects similar as the AR(1) model?
+
+In this case, the autoregressive effects are similar to the univariate AR(1) model.
+
+- Is there a cross-lagged effect from `selfdoubt` to `tired`?
+
+No, the cross-lagged regression estimate from `selfdoubt` to `tired` is estimated to be $-0.0003$.
+
+- Is there a cross-lagged effect from `tired` to `selfdoubt`?
+The cross-lagged regression estimate from `tired` to `selfdoubt` is estimated to be $-0.1075$. However, it is not significant (see `coef(var_selfdoubt)`)
+
+- How would you interpret the cross-lagged effects?
+The cross-lagged regression estimate from `tired` to `selfdoubt` you could interpret as people who were more tired at one accoasion had less selfdoubt at the next occasion.
+
+Unfortunately, with univariate estimation we cannot always estimate the 
+covariance between the residuals. As is the case here: because of different
+missing value patterns, the residuals of the two models do not match.
+A solution would be to remove all incomplete cases in the full data set (e.g., using `na.omit`). You can then extract the residuals, for example using the `residuals()` function from the `stats` package, and compute the covariance/correlation between them.
+
+Remove all missing cases from the data and fit the two univariate AR(1) models again. Compute the covariance between the residuals of the two models.
+```{r cov_residuals}
+# univariate model outcome selfdoubt
+var_selfdoubt2 <- lm(selfdoubt ~ selfdoubt_lag + tired_lag, data = na.omit(dat))
+# univariate model outcome tired
+var_tired2 <- lm(tired ~ tired_lag + selfdoubt_lag, data = na.omit(dat))
+
+cov(residuals(var_selfdoubt2), residuals(var_tired2))
+```
+
+A more elegant approach would be to estimate the VAR(1) model multivariately.
+The `vars` package is unfortunately not an option here, as it cannot handle missing data.
+We can, however, use the `var1()` function from the `psychonetrics` package for this.
+Conveniently, it has build-in functionality to handle lags and separate days and beeps
+in ESM data, through the arguments `dayvar` and `beepvar`, for which you have to
+provide to column names that indicate the days and the beep numbers, respectively.
+After you specified the model with the `var1()` function, you can fit the model with the `runmodel()` function. Finally, you can extract the parameter estimates with the `parameters()` function.
+
+The package has very extensive documentation, see e.g., https://psychonetrics.org/var1.html.
+
+Fit a multivariate VAR(1) model.
+
+```{r vars}
+if (!require("psychonetrics")) install.packages("psychonetrics")
+library(psychonetrics)
+mod_var <- var1(dat, vars = c("selfdoubt", "tired"),
+                dayvar = "date", beepvar = "beep")
+mod_var <- runmodel(mod_var)
+parameters(mod_var)
+```
+
+When looking at the output of the `parameters()` function, you will see the 
+estimated means (`mu`), the regression coefficients (`beta`), and the
+covariance matrix of the residuals (`sigma_zeta`).
+
+Answer the following questions:
+
+- Are the means and regression coefficients similar to the univariate estimates?
+
+They are similar.
+
+- Is the estimated residual covariance similar to the one you computed from the univariate residuals?
+
+The covariance from the univariate residuals was $0.310$ and the estimated covariance here (at sigma_zeta, tired ~~ selfdoubt) is $0.31$, so similar.
