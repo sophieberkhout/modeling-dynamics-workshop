@@ -1,0 +1,209 @@
+---
+title: "Fitting the AR(1) model to empirical data"
+author: "Sophie W. Berkhout"
+date: "5-10-2026"
+output: html_notebook
+---
+### Data from Peter Groot
+We will use a data set from Wichers et al. (2016) that is openly available (see Kossakowski et al., 2017).
+The data set is from a single male participant who was measured for 239 days with 10 ESM measurement occasions per day.
+The reason for the data collection was to study changes while the participant was gradually reducing his anti-depressant dosage to zero.
+The study was divided into five phases: 
+
+1. a baseline period
+2. a double-blind period where the anti-depressant dosage was not changed
+3. a double-blind period where the anti-depressant dosage was reduced to zero
+4. a post-assessment period where the anti-depressant dosage was not changed
+5. an additional post-assessment period.
+
+Wichers et al. (2016) showed that the participant transitioned into a state of depression during the post-dosage reduction period by studying the weekly depressive symptoms measurements.
+
+### Read data
+The original data has many different variables, including daily and weekly measurements, but we will only look at two ESM items for simplicity. The data set contains the following variables:
+
+- `date`: the date of the observation
+- `time`: the recording time of the observation
+- `phase`: the phase of the study (coded 1-5, see above)
+- `beep`: the beep number per day (1-10 beeps per day)
+- `selfdoubt`: "I doubt myself" scaled from 1 (not) to 7 (very)
+- `tired`: "I am tired" scaled from 1 (not) to 7 (very)
+
+```{r read_data}
+dat <- read.csv("data_groot.csv")
+```
+
+Since our model assumes a stable process over time, the model will likely not fit the period in the study where the anti-depressant dosage was changed. Therefore, we will only consider the pre-dosage reduction stage.
+
+```{r filter_data}
+dat <- subset(dat, phase == 1)
+dat
+```
+
+### Descriptives
+
+Use the code chunk below to answer the following questions:
+- How many observations are there in the pre-dosage reduction stage?
+- How many days are in the pre-dosage reduction stage?
+- What is the average number of beeps per day?
+- What is the mean of `selfdoubt`?
+- What is the mean of `tired`?
+- What is the correlation between `selfdoubt` and `tired`?
+
+```{r descriptives}
+nrow(dat)                     # number of observations
+length(unique(dat$date))      # total number of days
+mean(dat$beep)                # average number of beeps recorded
+mean(dat$selfdoubt)           # mean of selfdoubt
+mean(dat$tired)               # mean of tired
+cor(dat$selfdoubt, dat$tired) # correlation between selfdoubt and tired
+```
+
+### Data handling
+As you may have noticed, the data set only contains recorded beeps. Missed beeps are left out.
+Recall that when we want to make lagged versions of `selfdoubt` and `tired`, we need to make sure that we only keep lags of 1. 
+
+Also note that the data are observed over multiple days. 
+We only want to keep lagged observations within a day, as what happens between the first beep of a day and the last beep of the previous day is probably different than what happens between beeps within a day. 
+Thus, we also have to make sure that the lagged variable has a missing value at the begining of each day.
+
+Create the lagged variables and add them to the data frame with column names `selfdoubt_lag` and `tired_lag`.
+
+Hint: You can check whether you have done it correctly, by creating a lagged version of `beep` in a similar way. You can then see if `beep_lag` is always 1 value lower than `beep`, or missing when `beep` is 1 (the first observation of the day).
+
+```{r data_lagged}
+dat$selfdoubt_lag <- dat$tired_lag <- NA
+for (i in 2:nrow(dat)) {
+  dat$selfdoubt_lag[i] <- ifelse((dat$beep[i] - dat$beep[i - 1]) == 1, dat$selfdoubt[i - 1], NA)
+  dat$tired_lag[i] <- ifelse((dat$beep[i] - dat$beep[i - 1]) == 1, dat$tired[i - 1], NA)
+}
+```
+
+Compute the autocorrelation of both variables (e.g., the correlation between
+`selfdoubt` and `selfdoubt_lag`).
+
+```{r autocorrelation}
+cor(dat$selfdoubt, dat$selfdoubt_lag, use = "complete.obs")
+cor(dat$tired, dat$tired_lag, use = "complete.obs")
+```
+
+### Plots
+Plot a time series and autocorrelation scatter plot for `selfdoubt` and `tired`.
+You can use the plot functions you wrote in the previous exercise.
+
+For the time series, you need to make sure you have a variable that indicates 
+the measurement occasion, as you do not want to ignore the missed beeps.
+You can do this in two ways: (1) you create a variable that counts the intended
+observation number (e.g., the second beep of the second day was supposed to be
+the 12th observation); or (2) you use the date and time (hint: you can use the
+function `as.POSIXct` to create a variable with a date/time class).
+
+Note that these two methods will lead to slightly different figures, as the
+actual time intervals between the beeps are not equal.
+
+Use the code chunk below to create the new time variable.
+
+```{r new_time_variable}
+dat$datetime <- as.POSIXct(paste(dat$date, dat$time), format = "%d/%m/%y %H:%M:%S")
+```
+
+Now, you can plot the time series and autocorrelation scatter plots.
+
+```{r plot_functions}
+plotTimeSeries <- function(y, t) {
+  plot(t, y, type = "l")
+  # abline(h = mean(y, na.rm = TRUE))
+}
+
+plotScatterAuto <- function(y, y_lag) {
+  plot(y_lag, y)
+  abline(lm(y ~ y_lag))
+}
+```
+
+```{r plot_selfdoubt}
+layout(matrix(c(1, 2), nrow = 1), widths = c(3, 2))
+plotTimeSeries(dat$selfdoubt, dat$datetime)
+plotScatterAuto(dat$selfdoubt, dat$selfdoubt_lag)
+layout(1)
+```
+
+```{r plot_tired}
+layout(matrix(c(1, 2), nrow = 1), widths = c(3, 2))
+plotTimeSeries(dat$tired, dat$datetime)
+plotScatterAuto(dat$tired, dat$tired_lag)
+layout(1)
+```
+
+### Fit the AR(1) model
+Fit an AR(1) model using linear regression for `selfdoubt` and for `tired`. 
+Center the lagged predictor if you want to intercept to represent the mean of the process.
+
+AR(1) model for `selfdoubt`:
+```{r fit_ar_selfdoubt}
+dat$selfdoubt_lag_c <- dat$selfdoubt_lag - mean(dat$selfdoubt, na.rm = TRUE)
+mod_selfdoubt <- lm(selfdoubt ~ selfdoubt_lag_c, data = dat)
+mod_selfdoubt
+```
+
+AR(1) model for `tired`:
+```{r fit_ar_tired}
+dat$tired_lag_c <- dat$tired_lag - mean(dat$tired, na.rm = TRUE)
+mod_tired <- lm(tired ~ tired_lag_c, data = dat)
+mod_tired
+```
+
+Answer the following questions:
+
+- Is the estimated mean similar to the observed mean (if you estimated the intercept instead of the mean, you can compute the estimated mean using $\mu = \frac{c}{1-\phi}$)?
+
+For `selfdoubt`, the observed mean is $1.836$, the estimated mean is $1.791$.
+For `tired`, the observed mean is $2.136$, the estimated mean is $2.172$.
+
+- What are the estimates of the autoregressive effects?
+
+For `selfdoubt` the estimated autoregressive effect is $0.1$.
+For `tired` the estimated autoregressive effect is $0.01$.
+
+- How would you interpret the autoregressive effects?
+
+`selfdoubt` seems to have a small autoregressive effect, although it is not significant.
+You could interpret it as the participants had a small tendency to stay in above-average or below-average selfdoubt.
+`selfdoubt` seems to have a no autoregressive effect.
+
+### Extra exercise
+If you want, you can fit the model to data from a different phase and see how the estimates differ. For example, you could take phase 4 and 5 as a post-assessment period.
+
+```{r dat2}
+dat_raw <- read.csv("data_groot.csv")
+dat2 <- subset(dat_raw, phase == 4 | phase == 5)
+dat2
+```
+
+```{r dat2_lag}
+dat2$selfdoubt_lag <- dat2$tired_lag <- NA
+for (i in 2:nrow(dat2)) {
+  dat2$selfdoubt_lag[i] <- ifelse((dat2$beep[i] - dat2$beep[i - 1]) == 1, dat2$selfdoubt[i - 1], NA)
+  dat2$tired_lag[i] <- ifelse((dat2$beep[i] - dat2$beep[i - 1]) == 1, dat2$tired[i - 1], NA)
+}
+```
+
+```{r dat2_selfdoubt}
+dat2$selfdoubt_lag_c <- dat2$selfdoubt_lag - mean(dat2$selfdoubt, na.rm = TRUE)
+mod_selfdoubt2 <- lm(selfdoubt ~ selfdoubt_lag_c, data = dat2)
+mod_selfdoubt2
+```
+
+```{r dat2_tired}
+dat2$tired_lag_c <- dat2$tired_lag - mean(dat2$tired, na.rm = TRUE)
+mod_tired2 <- lm(tired ~ tired_lag_c, data = dat2)
+mod_tired2
+```
+
+### References
+
+Wichers, M., Groot, P. C., & Psychosystems, ESM Group, EWS Group. (2016). Critical Slowing Down as a Personalized Early Warning Signal for Depression. *Psychotherapy and Psychosomatics, 85*(2), 114–116. https://doi.org/10.1159/000441458
+
+Kossakowski, J. J., Groot, P. C., Haslbeck, J. M. B., Borsboom, D., & Wichers, M. (2017). Data from ‘Critical Slowing Down as a Personalized Early Warning Signal for Depression.’ *Journal of Open Psychology Data, 5*, 1. https://doi.org/10.5334/jopd.29
+
+
+
