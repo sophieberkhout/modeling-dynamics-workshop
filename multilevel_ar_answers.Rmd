@@ -31,7 +31,10 @@ linked to the first observation of the next person.
 Hint: The code from the $N=1$ data should work here as well.
 
 ```{r}
-# your code here
+dat$pa_lag <- NA
+for (i in 2:nrow(dat)) {
+  dat$pa_lag[i] <- ifelse((dat$beep[i] - dat$beep[i - 1]) == 1, dat$pa[i - 1], NA)
+}
 ```
 
 ### Descriptives
@@ -42,17 +45,32 @@ Also compute the correlations between them.
 How would you interpret these results? 
 
 ```{r descriptives}
-# your code here
+df_descriptives <- dat %>%
+  group_by(id) %>%
+  summarise(mean = mean(pa, na.rm = TRUE),
+            autocorrelation = cor(pa, pa_lag, use = "complete.obs")) %>%
+  ungroup()
+
+hist(df_descriptives$mean)
+hist(df_descriptives$autocorrelation)
+
+cor(df_descriptives$mean, df_descriptives$autocorrelation)
 ```
+There is a small negative correlation between the average positive affect and the autocorrelation, which means that people who have a higher than average positive affect tend to have a smaller autocorrelation.
 
 ### Time series plot
 Select a couple of individuals and plot their time series in one figure.
 
 ```{r timeseries}
-# your code here
+plot(dat[dat$id == unique(dat$id)[1], "counter"], dat[dat$id == unique(dat$id)[1], "pa"], type = "l", ylim = c(1, 5))
+lines(dat[dat$id == unique(dat$id)[2], "counter"], dat[dat$id == unique(dat$id)[2], "pa"], col = "blue")
+lines(dat[dat$id == unique(dat$id)[3], "counter"], dat[dat$id == unique(dat$id)[3], "pa"], col = "red")
+lines(dat[dat$id == unique(dat$id)[4], "counter"], dat[dat$id == unique(dat$id)[4], "pa"], col = "green")
+lines(dat[dat$id == unique(dat$id)[5], "counter"], dat[dat$id == unique(dat$id)[5], "pa"], col = "orange")
 ```
 
 Are the time series similar in their means and variances?
+Some people are similar to each other, but there are also some who are quite different (e.g., the orange en green lines).
 
 ### Fit the multilevel AR(1) model
 
@@ -75,15 +93,29 @@ if (!require("lme4")) install.packages("lme4")
 library(lme4)
 if (!require("lmerTest")) install.packages("lmerTest")
 library(lmerTest)
-# your code here
+
+# grand mean centering
+dat$pa_lag_c <- dat$pa_lag - mean(dat$pa_lag, na.rm = TRUE)
+
+# person mean centering
+dat$pa_lag_c <- with(
+  dat, pa_lag - ave(pa, id, FUN = function(x) mean(x, na.rm = TRUE))
+)
+
+mod_lm <- lmer(pa ~ pa_lag_c + (1 + pa_lag_c | id), data = dat)
+summary(mod_lm)
 ```
 
 How do the random effects relate to each other? 
+
+You can find the correlation under 'Random effects:', in the row of `pa_lag_c.` The correlation between the means (intercepts) and the autoregressions is $-0.08$. So there is barely any relation.
 
 Plot the estimated means against the estimated autoregressions.
 
 ```{r lme4_persons}
 # your code here
+re <- coef(mod_lm)$id
+plot(re$`(Intercept)`, re$pa_lag_c)
 ```
 
 Similar to the single-level model, with this kind of univariate estimation
@@ -105,6 +137,10 @@ Fit the multilevel AR(1) model using `ml_gvar()`.
 ```{r}
 ?ml_gvar
 # your code here
+mod_gar <- ml_gvar(dat, vars = "pa", idvar = "id",
+                   dayvar = "day", beepvar = "beep")
+mod_gar <- runmodel(mod_gvar)
+parameters(mod_gar)
 ```
 
 Unfortunately, I have not found a way to extract the person-specific estimates
@@ -161,6 +197,16 @@ library(mlts)
 ?mlts_model
 ?mlts_fit
 # your code here
+ar1_model <- mlts_model(q = 1)
+mod_mlts <- mlts_fit(
+  model = ar1_model,
+  data = dat,
+  id = "id",
+  ts = "pa",
+  iter = 2000,
+  monitor_person_pars = TRUE,
+  n_overnight_NAs = 6
+)
 ```
 
 A pro of this package is that it offers multivariate estimation as well as
@@ -175,7 +221,23 @@ Fit a multilevel vector autoregressive model with either the `psychonetrics` or
 the `mlts` package. You can choose any of the variables from the data set.
 
 ```{r extra}
-# your code here
+# mlts estimation
+var1_model <- mlts_model(q = 2)
+mod_mlts <- mlts_fit(
+  model = ar1_model,
+  data = dat,
+  id = "id",
+  ts = c("pa", "na"),
+  iter = 2000,
+  monitor_person_pars = TRUE,
+  n_overnight_NAs = 6
+)
+
+# psychonetrics estimation
+mod_gvar <- ml_gvar(dat, vars = c("pa", "na"), idvar = "id",
+                    dayvar = "day", beepvar = "beep")
+mod_gvar <- runmodel(mod_gvar)
+parameters(mod_gvar)
 ```
 
 ### References

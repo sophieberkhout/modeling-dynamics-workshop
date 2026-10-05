@@ -1,0 +1,109 @@
+---
+title: "Fitting a cross-lagged panel model"
+author: "Sophie W. Berkhout"
+date: "5-10-2026"
+output: html_notebook
+---
+
+### Data set
+Data from Van Eersel et al. (2025) made available through DataverseNL. It contains data of employees facing job loss on hours spent job searching and job loss grief at three waves.
+
+The variables in the data set:
+
+-id: id of participant
+-x1-3: planned job search hours	(1 = 0 hours; 2 = more than 0 but less than 1 hour; 3 = 1 to 5 hours; 4 = 5 to 10 hours; 5 = 10 to 20 hours; 6 = 20 hours or more)
+-y1-3: pre-job loss grief sum score of two times scaled 1-5 (so sum score is between 2-10)
+
+```{r read_data}
+dat <- read.csv("jobsearchgrief.csv")
+```
+
+### Descriptives
+
+Create boxplots of the scores of both $x$ and $y$ at the three time points.
+
+```{r boxplots}
+# your code here
+```
+
+Compute the mean per person across waves for both $x$ and $y$. Do people differ a lot?
+
+```{r}
+# your code here
+```
+
+### Fit the CLPM
+
+Specify the cross-lagged panel model using `lavaan`. To do this, you need to create a character string with `lavaan` code. I already filled in the specification of the first wave to the second wave and the covariances. You only need to add the effects of the second wave to the third wave.
+
+```{r specify_clpm}
+mod_CLPM <- '
+  x2 + y2 ~ x1 + y1
+  # your code for time point 3 here
+
+  # covariance observed variables first wave
+  x1 ~~ y1
+  # covariances residuals second and third wave
+  x2 ~~ y2
+  x3 ~~ x3
+'
+``` 
+
+After you specified the model, you can fit the model using the function `sem()`. Note that `lavaan` handles missing data with listwise deletion by default, thus it will throw out any row with missing values. If you want to use all available data, you can specify Full Information Maximum Likelihood with the argument `missing = "ML"`.
+
+You can see the results with `summary()`. Finally, you can get the standardized estimates with the function `standardizedSolution()`.
+
+```{r fit_clpm}
+if (!require("lavaan")) install.packages("lavaan")
+library(lavaan)
+# your code here
+```
+
+- Which regression coefficents are significant?
+
+- What standardized cross-lagged effect is the strongest?
+
+You can also specify the CLPM with latent mean centering (the alternative formulation).
+This way, the intercepts will represent the means of the variables. The regression coefficients should remain the same.
+
+It is a bit of a workaround, so I provide the specification here. It works like this. We create latent variables with a mean of 0 for each variable at each time point. Then we specify the CLPM for these latent variables and say that the observed variables have no residuals themselves. 
+Thus, we specify `x2 = intercept + wx2` to create $x_2 = \mu_{x,2} + x^*_2$.
+
+```{r clpm_centered}
+mod_CLPM_c <- '
+  # no measurement error in the observed scores
+  x1 ~~ 0*x1
+  x2 ~~ 0*x2
+  x3 ~~ 0*x3
+  y1 ~~ 0*y1
+  y2 ~~ 0*y2
+  y3 ~~ 0*y3
+  
+  # within-person centered variables
+  wx1 =~ 1*x1
+  wx2 =~ 1*x2
+  wx3 =~ 1*x3 
+  wy1 =~ 1*y1
+  wy2 =~ 1*y2
+  wy3 =~ 1*y3
+  
+  # lagged effects between within-person centered variables
+  wx2 + wy2 ~ wx1 + wy1
+  wx3 + wy3 ~ wx2 + wy2
+
+  # covariance centered variables first wave
+  wx1 ~~ wy1
+  # covariance residuals second and third wave
+  wx2 ~~ wy2
+  wx3 ~~ wx3
+'
+
+fit_CLPM_c <- sem(mod_CLPM_c, data = dat, missing = "ML")
+summary(fit_CLPM_c)
+standardizedSolution(fit_CLPM_c)
+``` 
+
+Are the intercepts similar the observed means?
+
+### References
+Janske van Eersel; Inge Hulshof; Miriam I. Wickham; Geert Smid; Paul Boelen, 2025, "Replication Data for: Reciprocal relations between job loss-related grief reactions and quality of job search behaviour: A cross-lagged analysis", https://doi.org/10.34894/1B1INC, DataverseNL, V1

@@ -1,0 +1,110 @@
+---
+title: "Fitting a random-intercept cross-lagged panel model"
+author: "Sophie W. Berkhout"
+date: "5-10-2026"
+output: html_notebook
+---
+
+### Data set
+We will use the same data as the previous exercise about fitting the regular cross-lagged panel model.
+
+Data from Van Eersel et al. (2025) made available through DataverseNL. It contains data of employees facing job loss on hours spent job searching and job loss grief at three waves.
+
+The variables in the data set:
+
+-id: id of participant
+-x1-3: planned job search hours	(1 = 0 hours; 2 = more than 0 but less than 1 hour; 3 = 1 to 5 hours; 4 = 5 to 10 hours; 5 = 10 to 20 hours; 6 = 20 hours or more)
+-y1-3: pre-job loss grief sum score of two times scaled 1-5 (so sum score is between 2-10)
+
+```{r read_data}
+dat <- read.csv("jobsearchgrief.csv")
+```
+
+### Fit the RI-CLPM
+First, you need to specify the model as a character string again. It is similar to the specification of the latent mean centered cross-lagged panel model, but now you need to add the random intercept components, the variance and covariance of the random intercepts, and you need to explicitly specify the variances of the within components. The latter was automatically estimated in the latent mean centered CLPM, but that is not the case here.
+
+I specified the model for you, because it is quite complicated.
+
+```{r}
+mod_RICLPM <- '
+  # between components (random intercepts)
+  RIx =~ 1*x1 + 1*x2 + 1*x3
+  RIy =~ 1*y1 + 1*y2 + 1*y3
+
+  # variance and covariance of random intercepts
+  RIx ~~ RIx
+  RIy ~~ RIy
+  RIx ~~ RIy
+  
+  # within-person centered variables
+  wx1 =~ 1*x1
+  wx2 =~ 1*x2
+  wx3 =~ 1*x3 
+  wy1 =~ 1*y1
+  wy2 =~ 1*y2
+  wy3 =~ 1*y3
+
+  # lagged effects between within-person centered variables
+  wx2 + wy2 ~ wx1 + wy1
+  wx3 + wy3 ~ wx2 + wy2
+
+  # covariance within-person centered variables first wave
+  wx1 ~~ wy1
+  
+  # covariances residuals of within-person centered variables second and third wave
+  wx2 ~~ wy2
+  wx3 ~~ wy3
+  
+  # variance of within-person centered variables
+  wx1 ~~ wx1
+  wy1 ~~ wy1 
+  
+  # residual variance of within-person centered variables
+  wx2 ~~ wx2
+  wy2 ~~ wy2 
+  wx3 ~~ wx3 
+  wy3 ~~ wy3 
+'
+```
+
+You can now fit the model. Instead of `sem()`, we need to now use `lavaan()`, because of different defaults. Using `sem()` may cause convergence issues. Similar to the CLPM, we would like to use all information instead of removing cases listwise, so you want to set `missing = "ML"`. You also need to set the arguments `meanstructure = TRUE` and `int.ov.free = TRUE`. This tells lavaan to model the means (intercepts) as well as the variances and covariances, and allows the intercepts of the observed variables to be estimated rather than fixed at zero.
+
+You can see the results with `summary()`. Finally, you can get the standardized estimates with the function `standardizedSolution()`.
+
+``` {r fit_ricpm}
+if (!require("lavaan")) install.packages("lavaan")
+library(lavaan)
+fit_RICLPM <- lavaan(mod_RICLPM, 
+  data = dat, 
+  missing = "ML",
+  meanstructure = TRUE, 
+  int.ov.free = TRUE
+)
+summary(fit_RICLPM)
+standardizedSolution(fit_RICLPM)
+```
+
+Can you find all the relevant parameter estimates?
+
+If the random intercepts have a nonzero variance, it is an indication that the RI-CLPM should be preferred over the CLPM. While the summary of the model fit provides p-values, it is generally discouraged to use them for variances because they are bounded at zero (i.e., they cannot be negative). An option is to look at the confidence intervals and see if the intervals are not close to zero. You can extract the confidence intervals using `parameterEstimates()`. Try this out and interpret the confidence intervals of the random intercept variances.
+
+```{r confidence_intervals}
+parameterEstimates(fit_RICLPM)
+```
+
+You can extract the estimates of the random intercepts using `lavPredict()`. Plot a histogram of the random intercepts of x and y. Why do they have a mean of 0?
+
+The random intercepts represent the individual deviation from the grand means. 
+For example, the intercept of x1 is 2.872. The RIx of the first person is 0.94383420. 
+So, their estimated mean is 2.872 - 0.94383420 = 1.928166.
+
+```{r person_estimates}
+latent_estimates <- lavPredict(fit_RICLPM)
+
+random_intercepts <- latent_estimates[, c("RIx", "RIy")]
+hist(random_intercepts[, 1])
+hist(random_intercepts[, 2])
+```
+
+### References
+Janske van Eersel; Inge Hulshof; Miriam I. Wickham; Geert Smid; Paul Boelen, 2025, "Replication Data for: Reciprocal relations between job loss-related grief reactions and quality of job search behaviour: A cross-lagged analysis", https://doi.org/10.34894/1B1INC, DataverseNL, V1
