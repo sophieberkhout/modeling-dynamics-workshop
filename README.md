@@ -4,7 +4,9 @@
 Link to the Dyadic Interaction Dynamics Shiny App (VAR[1] models): https://utrecht-university.shinyapps.io/dyadic-interaction-dynamics/.
 
 ### Data
-The files `data_groot.csv` and `data_groot_prepped.csv` contains data from Wichers et al. (2016) that is openly available (see Kossakowski et al., 2017).
+The files `data_groot.csv` and `data_groot_prepped.csv` contains data 
+from Wichers et al. (2016) that is openly available (see Kossakowski et al., 2017), 
+licensed under CC BY 4.0. I removed columns that were not relevant for this workshop.
 
 ### References
 
