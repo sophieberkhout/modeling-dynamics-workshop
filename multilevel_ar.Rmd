@@ -36,6 +36,15 @@ visualize the relations between the variables.
 # your code here
 ```
 
+### Time series plot
+Select a couple of individuals and plot their time series in one figure.
+
+```{r timeseries}
+# your code here
+```
+
+Are the time series similar in their means and variances?
+
 ### Fit the multilevel AR(1) model
 
 #### Linear mixed effect model with `lme4`
