@@ -111,7 +111,7 @@ Now, you can plot the time series and autocorrelation scatter plots.
 ```{r plot_functions}
 plotTimeSeries <- function(y, t) {
   plot(t, y, type = "l")
-  # abline(h = mean(y, na.rm = TRUE))
+  abline(h = mean(y, na.rm = TRUE))
 }
 
 plotScatterAuto <- function(y, y_lag) {
