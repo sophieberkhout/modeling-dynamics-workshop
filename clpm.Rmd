@@ -45,7 +45,7 @@ mod_CLPM <- '
   x1 ~~ y1
   # covariances residuals second and third wave
   x2 ~~ y2
-  x3 ~~ x3
+  x3 ~~ xy
 '
 ``` 
 

@@ -106,5 +106,25 @@ hist(random_intercepts[, 1])
 hist(random_intercepts[, 2])
 ```
 
+### Extra: `psychonetrics` estimation
+
+You get the following warning when you specifiy the `ri_clpm()`: Model has more latent variables (8) than observed variables (6).
+The RI-CLPM specification always has more latent variables than observed variables, because the random intercepts are seen as latent as well as the centered within-person variables.
+
+```{r}
+# Specify a design matrix for the lagged effects
+Design <- matrix(c(
+  "x1", "x2", "x3",
+  "y1", "y2", "y3"
+), nrow = 2, byrow = TRUE)
+rownames(Design) <- c("x", "y")
+
+# Fit panel graphical VAR:
+library(psychonetrics)
+mod_ri_clpm <- ri_clpm(dat, vars = Design)
+mod_ri_clpm <- runmodel(mod_ri_clpm)
+parameters(mod_ri_clpm)
+```
+
 ### References
 Janske van Eersel; Inge Hulshof; Miriam I. Wickham; Geert Smid; Paul Boelen, 2025, "Replication Data for: Reciprocal relations between job loss-related grief reactions and quality of job search behaviour: A cross-lagged analysis", https://doi.org/10.34894/1B1INC, DataverseNL, V1
