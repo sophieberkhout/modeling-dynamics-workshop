@@ -101,7 +101,7 @@ mod_CLPM_c <- '
   wx1 ~~ wy1
   # covariances residuals second and third wave
   wx2 ~~ wy2
-  wx3 ~~ wx3
+  wx3 ~~ wy3
 '
 
 fit_CLPM_c <- sem(mod_CLPM_c, data = dat, missing = "ML")
